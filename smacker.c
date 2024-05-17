@@ -838,6 +838,8 @@ static smk smk_open_generic(const unsigned char m, union smk_read_t fp, unsigned
 			smk_malloc(s->source.chunk_data[temp_u], s->chunk_size[temp_u]);
 			smk_read(s->source.chunk_data[temp_u], s->chunk_size[temp_u]);
 		}
+	} else if (s->mode == SMK_MODE_MEMORY_STREAM) {
+		smk_malloc(s->source.chunk_data, (s->f + s->ring_frame) * sizeof(unsigned char *));
 	} else {
 		/* MODE_STREAM: don't read anything now, just precompute offsets.
 			use fseek to verify that the file is "complete" */
@@ -877,6 +879,26 @@ smk smk_open_memory(const unsigned char * buffer, const unsigned long size)
 
 	if (!(s = smk_open_generic(0, fp, size, SMK_MODE_MEMORY)))
 		fprintf(stderr, "libsmacker::smk_open_memory(buffer,%lu) - ERROR: Fatal error in smk_open_generic, returning NULL.\n", size);
+
+	return s;
+}
+
+/* open an smk (from a memory buffer; without reading frames) */
+smk smk_open_memory_stream(const unsigned char * buffer, const unsigned long size)
+{
+	smk s = NULL;
+	union smk_read_t fp;
+
+	if (buffer == NULL) {
+		fputs("libsmacker::smk_open_memory_stream() - ERROR: buffer pointer is NULL\n", stderr);
+		return NULL;
+	}
+
+	/* set up the read union for Memory mode */
+	fp.ram = (unsigned char *)buffer;
+
+	if (!(s = smk_open_generic(0, fp, size, SMK_MODE_MEMORY_STREAM)))
+		fprintf(stderr, "libsmacker::smk_open_memory_stream(buffer,%lu) - ERROR: Fatal error in smk_open_generic, returning NULL.\n", size);
 
 	return s;
 }
@@ -969,8 +991,10 @@ void smk_close(smk s)
 	} else {
 		/* mem-mode */
 		if (s->source.chunk_data != NULL) {
-			for (u = 0; u < (s->f + s->ring_frame); u++)
-				smk_free(s->source.chunk_data[u]);
+			if (s->mode != SMK_MODE_MEMORY_STREAM) {
+				for (u = 0; u < (s->f + s->ring_frame); u++)
+					smk_free(s->source.chunk_data[u]);
+			}
 
 			smk_free(s->source.chunk_data);
 		}
@@ -981,7 +1005,7 @@ void smk_close(smk s)
 }
 
 /* tell some info about the file */
-char smk_info_all(const smk object, unsigned long * frame, unsigned long * frame_count, double * usf)
+char smk_info_all(const smk object, unsigned long * frame, unsigned long * frame_count, unsigned char * frame_type, double * usf)
 {
 	/* null check */
 	if (object == NULL) {
@@ -989,8 +1013,8 @@ char smk_info_all(const smk object, unsigned long * frame, unsigned long * frame
 		return -1;
 	}
 
-	if (!frame && !frame_count && !usf) {
-		fputs("libsmacker::smk_info_all(object,frame,frame_count,usf) - ERROR: Request for info with all-NULL return references\n", stderr);
+	if (!frame && !frame_count && !frame_type && !usf) {
+		fputs("libsmacker::smk_info_all(object,frame,frame_count,frame_type,usf) - ERROR: Request for info with all-NULL return references\n", stderr);
 		goto error;
 	}
 
@@ -999,6 +1023,9 @@ char smk_info_all(const smk object, unsigned long * frame, unsigned long * frame
 
 	if (frame_count)
 		*frame_count = object->f;
+
+	if (frame_type)
+		*frame_type = object->frame_type[object->cur_frame];
 
 	if (usf)
 		*usf = object->usf;
@@ -1792,6 +1819,20 @@ char smk_seek_keyframe(smk s, unsigned long f)
 		fprintf(stderr, "libsmacker::smk_seek_keyframe(s,%lu) - Warning: frame %lu: smk_render returned errors.\n", f, s->cur_frame);
 		return -1;
 	}
+
+	return 0;
+}
+
+/* set chunk data pointer for MEMORY_STREAM mode */
+char smk_set_chunk(smk s, unsigned long frame, unsigned char * chunk)
+{
+	/* null check */
+	if (s == NULL) {
+		fputs("libsmacker::smk_set_chunk() - ERROR: smk is NULL\n", stderr);
+		return -1;
+	}
+
+	s->source.chunk_data[frame] = chunk;
 
 	return 0;
 }

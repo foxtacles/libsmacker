@@ -35,8 +35,9 @@ typedef struct smk_t * smk;
 #define SMK_ERROR	-1
 
 /** file-processing mode, pass to smk_open_file */
-#define SMK_MODE_DISK	0x00
-#define SMK_MODE_MEMORY	0x01
+#define SMK_MODE_DISK          0x00
+#define SMK_MODE_MEMORY	       0x01
+#define SMK_MODE_MEMORY_STREAM 0x02
 
 /** Y-scale meanings */
 #define	SMK_FLAG_Y_NONE	0x00
@@ -65,13 +66,15 @@ smk smk_open_file(const char * filename, unsigned char mode);
 smk smk_open_filepointer(FILE * file, unsigned char mode);
 /** read an smk (from a memory buffer) */
 smk smk_open_memory(const unsigned char * buffer, unsigned long size);
+/** read an smk (from a memory buffer; without reading frames) */
+smk smk_open_memory_stream(const unsigned char * buffer, unsigned long size);
 
 /* CLOSE OPERATIONS */
 /** close out an smk file and clean up memory */
 void smk_close(smk object);
 
 /* GET FILE INFO OPERATIONS */
-char smk_info_all(const smk object, unsigned long * frame, unsigned long * frame_count, double * usf);
+char smk_info_all(const smk object, unsigned long * frame, unsigned long * frame_count, unsigned char * frame_type, double * usf);
 char smk_info_video(const smk object, unsigned long * w, unsigned long * h, unsigned char * y_scale_mode);
 char smk_info_audio(const smk object, unsigned char * track_mask, unsigned char channels[7], unsigned char bitdepth[7], unsigned long audio_rate[7]);
 
@@ -95,6 +98,8 @@ char smk_first(smk object);
 char smk_next(smk object);
 /** seek to first keyframe before/at N in an smk */
 char smk_seek_keyframe(smk object, unsigned long frame);
+/** set chunk data pointer for MEMORY_STREAM mode */
+char smk_set_chunk(smk object, unsigned long frame, unsigned char * chunk);
 
 #ifdef __cplusplus
 }
